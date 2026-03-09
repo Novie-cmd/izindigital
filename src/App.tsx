@@ -253,9 +253,9 @@ const ResearcherForm = ({ onSuccess }: { onSuccess: () => void }) => {
       animate={{ opacity: 1, y: 0 }}
       className="max-w-2xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-100"
     >
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-slate-800">Form Permohonan Izin Penelitian</h2>
-        <p className="text-slate-500 mt-1">Lengkapi data di bawah ini untuk mengajukan izin penelitian.</p>
+      <div className="-mx-8 -mt-8 mb-8 p-8 bg-blue-600 rounded-t-3xl">
+        <h2 className="text-2xl font-bold text-white">Form Permohonan Izin Penelitian</h2>
+        <p className="text-blue-50 mt-1">Lengkapi data di bawah ini untuk mengajukan izin penelitian.</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
