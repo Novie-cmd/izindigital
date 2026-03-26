@@ -9,6 +9,9 @@ import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log(`Current working directory: ${process.cwd()}`);
+console.log(`__dirname: ${__dirname}`);
+
 // Ensure uploads directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -55,7 +58,6 @@ db.exec(`
     file_proposal TEXT,
     file_persetujuan TEXT,
     file_rekomendasi TEXT,
-    satuan TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
@@ -67,20 +69,35 @@ const seedUsers = () => {
     { username: "pimpinan", password: "pimpinan123", role: "PIMPINAN" },
   ];
 
+  console.log("Seeding users...");
   const checkUser = db.prepare("SELECT * FROM users WHERE username = ?");
   const insertUser = db.prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
 
   users.forEach((u) => {
-    if (!checkUser.get(u.username)) {
+    const existing = checkUser.get(u.username);
+    if (!existing) {
+      console.log(`Inserting user: ${u.username}`);
       insertUser.run(u.username, u.password, u.role);
+    } else {
+      console.log(`User already exists: ${u.username}`);
     }
   });
+  
+  const allUsers = db.prepare("SELECT username, role FROM users").all();
+  console.log("Current users in DB:", allUsers);
 };
 seedUsers();
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  try {
+    const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as any;
+    console.log(`Database initialized. User count: ${userCount.count}`);
+  } catch (err) {
+    console.error("Database initialization error:", err);
+  }
 
   app.use(express.json());
   app.use("/uploads", express.static(uploadDir));
@@ -91,22 +108,45 @@ async function startServer() {
     next();
   });
 
+  // Health Check & DB Verify
+  app.get("/api/health", (req, res) => {
+    try {
+      const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as any;
+      const appCount = db.prepare("SELECT COUNT(*) as count FROM applications").get() as any;
+      const users = db.prepare("SELECT username, role FROM users").all();
+      res.json({ 
+        status: "ok", 
+        database: "connected",
+        counts: {
+          users: userCount.count,
+          applications: appCount.count
+        },
+        users: users
+      });
+    } catch (error) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
   // Auth Route
   app.post("/api/login", (req, res) => {
     try {
       const { username, password } = req.body;
-      console.log(`Login attempt for username: ${username}`);
+      const normalizedUsername = username?.toLowerCase().trim();
+      console.log(`Login attempt for: ${normalizedUsername}`);
       
-      if (!username || !password) {
+      if (!normalizedUsername || !password) {
         return res.status(400).json({ success: false, error: "Username dan password wajib diisi" });
       }
 
-      const user = db.prepare("SELECT * FROM users WHERE username = ? AND password = ?").get(username, password) as any;
+      const query = db.prepare("SELECT * FROM users WHERE LOWER(username) = ? AND password = ?");
+      console.log(`Running query for: ${normalizedUsername} with password: ${password}`);
+      const user = query.get(normalizedUsername, password) as any;
       if (user) {
-        console.log(`Login success for: ${username}`);
+        console.log(`Login success for: ${normalizedUsername} (Role: ${user.role})`);
         res.json({ success: true, user: { username: user.username, role: user.role } });
       } else {
-        console.log(`Login failed for: ${username} - Invalid credentials`);
+        console.log(`Login failed for: ${normalizedUsername} - Invalid credentials`);
         res.status(401).json({ success: false, error: "Username atau password salah" });
       }
     } catch (error) {
@@ -122,7 +162,7 @@ async function startServer() {
     { name: "persetujuan", maxCount: 1 },
     { name: "rekomendasi", maxCount: 1 }
   ]), (req, res) => {
-    const { nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, tanggal_mulai, tanggal_selesai, satuan } = req.body;
+    const { nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, tanggal_mulai, tanggal_selesai } = req.body;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
     
     const file_ktp = files?.["ktp"]?.[0]?.filename;
@@ -135,14 +175,14 @@ async function startServer() {
         INSERT INTO applications (
           nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, 
           tanggal_mulai, tanggal_selesai, file_ktp, file_proposal, 
-          file_persetujuan, file_rekomendasi, satuan
+          file_persetujuan, file_rekomendasi
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const info = stmt.run(
         nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, 
         tanggal_mulai, tanggal_selesai, file_ktp, file_proposal, 
-        file_persetujuan, file_rekomendasi, satuan
+        file_persetujuan, file_rekomendasi
       );
       res.json({ id: info.lastInsertRowid, status: "success" });
     } catch (error) {

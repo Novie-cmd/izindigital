@@ -99,6 +99,7 @@ const LoginForm = ({ role, onLogin }: { role: string, onLogin: (user: User) => v
     e.preventDefault();
     setLoading(true);
     setError('');
+    console.log(`Attempting login for role: ${role}, username: ${username}`);
     try {
       const res = await fetch('/api/login', {
         method: 'POST',
@@ -106,6 +107,7 @@ const LoginForm = ({ role, onLogin }: { role: string, onLogin: (user: User) => v
         body: JSON.stringify({ username, password })
       });
       
+      console.log(`Login response status: ${res.status}`);
       let data;
       const text = await res.text();
       try {
@@ -116,7 +118,10 @@ const LoginForm = ({ role, onLogin }: { role: string, onLogin: (user: User) => v
         return;
       }
 
+      console.log('Login response data:', data);
+
       if (data.success) {
+        console.log(`Login success. User role: ${data.user.role}, Current role: ${role}`);
         if (data.user.role.toLowerCase() === role.toLowerCase()) {
           onLogin(data.user);
         } else {
@@ -869,11 +874,12 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    console.log(`Current Role: ${role}, Current User:`, user);
     // Reset user when switching to Researcher
     if (role === 'Researcher') {
       setUser(null);
     }
-  }, [role]);
+  }, [role, user]);
 
   const handleLogout = () => {
     setUser(null);
