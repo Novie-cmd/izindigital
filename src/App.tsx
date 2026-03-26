@@ -15,7 +15,11 @@ import {
   ArrowLeft,
   LogIn,
   LogOut,
-  Lock
+  Lock,
+  Filter,
+  Users,
+  FileCheck,
+  X
 } from 'lucide-react';
 
 // --- Types ---
@@ -479,20 +483,43 @@ const PermitLetter = ({ app, onClose }: { app: Application, onClose: () => void 
 
 const AdminDashboard = ({ role }: { role: 'Admin' | 'Pimpinan' }) => {
   const [apps, setApps] = useState<Application[]>([]);
+  const [filteredApps, setFilteredApps] = useState<Application[]>([]);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [catatan, setCatatan] = useState('');
   const [nomorSurat, setNomorSurat] = useState('');
   const [showLetter, setShowLetter] = useState<Application | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   const fetchApps = async () => {
-    const res = await fetch('/api/applications');
-    const data = await res.json();
-    setApps(data);
+    try {
+      const res = await fetch('/api/applications');
+      const data = await res.json();
+      setApps(data);
+      setFilteredApps(data);
+    } catch (error) {
+      console.error('Failed to fetch applications:', error);
+    }
   };
 
   useEffect(() => {
     fetchApps();
   }, []);
+
+  useEffect(() => {
+    let result = apps;
+    if (searchQuery) {
+      result = result.filter(app => 
+        app.nama_lengkap.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        app.instansi.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        app.judul_penelitian.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    if (statusFilter !== 'ALL') {
+      result = result.filter(app => app.status === statusFilter);
+    }
+    setFilteredApps(result);
+  }, [searchQuery, statusFilter, apps]);
 
   const handleVerify = async (id: number, status: string) => {
     await fetch(`/api/applications/${id}/verify`, {
@@ -517,170 +544,314 @@ const AdminDashboard = ({ role }: { role: 'Admin' | 'Pimpinan' }) => {
     fetchApps();
   };
 
+  const stats = {
+    total: apps.length,
+    pending: apps.filter(a => a.status === 'PENDING').length,
+    verified: apps.filter(a => a.status === 'VERIFIED').length,
+    approved: apps.filter(a => a.status === 'APPROVED').length,
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-bold text-slate-800">Portal {role}</h2>
-          <p className="text-slate-500">Kelola permohonan izin penelitian yang masuk.</p>
-        </div>
-        <div className="flex gap-4">
-          <div className="bg-white border border-slate-200 px-4 py-2 rounded-xl flex items-center gap-2">
-            <Search className="w-4 h-4 text-slate-400" />
-            <input placeholder="Cari permohonan..." className="outline-none text-sm bg-transparent" />
+      {/* Header & Stats */}
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Portal {role}</h2>
+            <p className="text-slate-500 mt-1">Sistem Manajemen Izin Penelitian BAKESBANGPOLDAGRI NTB</p>
           </div>
+          <div className="flex items-center gap-3">
+            <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+              <Search className="w-4 h-4 text-slate-400" />
+              <input 
+                placeholder="Cari pemohon atau judul..." 
+                className="outline-none text-sm bg-transparent w-48 md:w-64"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Total Pengajuan', value: stats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Menunggu Verifikasi', value: stats.pending, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { label: 'Sudah Diverifikasi', value: stats.verified, icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+            { label: 'Sudah Disetujui', value: stats.approved, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                <stat.icon className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</p>
+                <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Pemohon</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Judul Penelitian</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {apps.map((app) => (
-              <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="font-bold text-slate-800">{app.nama_lengkap}</div>
-                  <div className="text-xs text-slate-500">{app.instansi}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-slate-700 line-clamp-1 max-w-xs">{app.judul_penelitian}</div>
-                  <div className="text-[10px] text-slate-400 mt-1">{app.lokasi_penelitian}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <StatusBadge status={app.status} />
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex gap-2">
-                    {role === 'Admin' && app.status === 'PENDING' && (
-                      <button 
-                        onClick={() => setSelectedApp(app)}
-                        className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"
-                        title="Verifikasi"
-                      >
-                        <ShieldCheck className="w-5 h-5" />
-                      </button>
-                    )}
-                    {role === 'Pimpinan' && app.status === 'VERIFIED' && (
-                      <button 
-                        onClick={() => setSelectedApp(app)}
-                        className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-lg transition-colors"
-                        title="Setujui"
-                      >
-                        <UserCheck className="w-5 h-5" />
-                      </button>
-                    )}
-                    {app.status === 'APPROVED' && (
-                      <button 
-                        onClick={() => setShowLetter(app)}
-                        className="p-2 hover:bg-slate-100 text-slate-600 rounded-lg transition-colors"
-                        title="Lihat Surat"
-                      >
-                        <FileText className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+      {/* Filters & Table */}
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+            <Filter className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+            {['ALL', 'PENDING', 'VERIFIED', 'APPROVED', 'REJECTED'].map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${
+                  statusFilter === s 
+                    ? 'bg-slate-800 text-white border-slate-800 shadow-md' 
+                    : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {s === 'ALL' ? 'Semua' : s}
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+          <p className="text-xs font-medium text-slate-400">
+            Menampilkan {filteredApps.length} dari {apps.length} permohonan
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">Pemohon & Instansi</th>
+                <th className="px-8 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">Detail Penelitian</th>
+                <th className="px-8 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">Status</th>
+                <th className="px-8 py-5 text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredApps.length > 0 ? (
+                filteredApps.map((app) => (
+                  <tr key={app.id} className="group hover:bg-slate-50/80 transition-all duration-200">
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm uppercase">
+                          {app.nama_lengkap.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">{app.nama_lengkap}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{app.instansi}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="text-sm font-medium text-slate-700 line-clamp-1 max-w-xs leading-relaxed">{app.judul_penelitian}</div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {app.tanggal_mulai}
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-[10px] font-bold text-slate-400">{app.lokasi_penelitian}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <StatusBadge status={app.status} />
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex justify-end gap-2">
+                        {role === 'Admin' && app.status === 'PENDING' && (
+                          <button 
+                            onClick={() => setSelectedApp(app)}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                          >
+                            <ShieldCheck className="w-4 h-4" /> Verifikasi
+                          </button>
+                        )}
+                        {role === 'Pimpinan' && app.status === 'VERIFIED' && (
+                          <button 
+                            onClick={() => setSelectedApp(app)}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                          >
+                            <UserCheck className="w-4 h-4" /> Setujui
+                          </button>
+                        )}
+                        {app.status === 'APPROVED' && (
+                          <button 
+                            onClick={() => setShowLetter(app)}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-800 hover:text-white transition-all shadow-sm"
+                          >
+                            <FileCheck className="w-4 h-4" /> Lihat Surat
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setSelectedApp(app)}
+                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+                          title="Detail"
+                        >
+                          <PlusCircle className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-8 py-20 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300">
+                        <Search className="w-8 h-8" />
+                      </div>
+                      <h3 className="font-bold text-slate-400">Tidak ada permohonan ditemukan</h3>
+                      <p className="text-sm text-slate-400">Coba ubah kata kunci pencarian atau filter status Anda.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Modal Action */}
       <AnimatePresence>
         {selectedApp && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl space-y-6"
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden"
             >
-              <div>
-                <h3 className="text-xl font-bold text-slate-800">
-                  {role === 'Admin' ? 'Verifikasi Permohonan' : 'Persetujuan Pimpinan'}
-                </h3>
-                <p className="text-slate-500 text-sm mt-1">
-                  {selectedApp.nama_lengkap} - {selectedApp.instansi}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-sm font-semibold text-slate-700">Dokumen Pendukung</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'KTP', file: selectedApp.file_ktp },
-                    { label: 'Proposal', file: selectedApp.file_proposal },
-                    { label: 'Persetujuan', file: selectedApp.file_persetujuan },
-                    { label: 'Rekomendasi', file: selectedApp.file_rekomendasi }
-                  ].map((doc, i) => (
-                    <a 
-                      key={i}
-                      href={`/uploads/${doc.file}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-medium transition-all ${
-                        doc.file 
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' 
-                          : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
-                      }`}
-                      onClick={e => !doc.file && e.preventDefault()}
-                    >
-                      <FileText className="w-4 h-4" />
-                      {doc.label}
-                    </a>
-                  ))}
+              <div className="p-8 border-b border-slate-100 flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <StatusBadge status={selectedApp.status} />
+                    <span className="text-xs font-medium text-slate-400">ID: #{selectedApp.id}</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-800">
+                    {role === 'Admin' ? 'Verifikasi Permohonan' : 'Persetujuan Pimpinan'}
+                  </h3>
+                  <p className="text-slate-500 mt-1">
+                    Tinjau kelengkapan berkas dan berikan keputusan.
+                  </p>
                 </div>
-              </div>
-
-              {role === 'Pimpinan' && (
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Nomor Surat</label>
-                  <input 
-                    placeholder="Contoh: 070/123/BAKESBANGPOLDAGRI/2024"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    value={nomorSurat}
-                    onChange={e => setNomorSurat(e.target.value)}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Catatan {role}</label>
-                <textarea 
-                  rows={3}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
-                  value={catatan}
-                  onChange={e => setCatatan(e.target.value)}
-                />
-              </div>
-
-              <div className="flex gap-3">
                 <button 
                   onClick={() => setSelectedApp(null)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
                 >
-                  Batal
+                  <X className="w-6 h-6" />
                 </button>
+              </div>
+
+              <div className="p-8 space-y-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                {/* Applicant Info */}
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nama Pemohon</p>
+                    <p className="font-bold text-slate-800">{selectedApp.nama_lengkap}</p>
+                    <p className="text-xs text-slate-500">NIK: {selectedApp.nik}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Instansi</p>
+                    <p className="font-bold text-slate-800">{selectedApp.instansi}</p>
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Judul Penelitian</p>
+                    <p className="text-sm font-medium text-slate-700 leading-relaxed italic">"{selectedApp.judul_penelitian}"</p>
+                  </div>
+                </div>
+
+                {/* Documents */}
+                <div className="space-y-4">
+                  <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-600" /> Dokumen Pendukung
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: 'KTP Pemohon', file: selectedApp.file_ktp },
+                      { label: 'Proposal Penelitian', file: selectedApp.file_proposal },
+                      { label: 'Surat Persetujuan', file: selectedApp.file_persetujuan },
+                      { label: 'Surat Rekomendasi', file: selectedApp.file_rekomendasi }
+                    ].map((doc, i) => (
+                      <a 
+                        key={i}
+                        href={`/uploads/${doc.file}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`p-4 rounded-2xl border flex items-center justify-between group transition-all ${
+                          doc.file 
+                            ? 'bg-white border-slate-200 hover:border-emerald-500 hover:shadow-md' 
+                            : 'bg-slate-50 border-slate-100 opacity-50 cursor-not-allowed'
+                        }`}
+                        onClick={e => !doc.file && e.preventDefault()}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${doc.file ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <span className="text-xs font-bold text-slate-700">{doc.label}</span>
+                        </div>
+                        {doc.file && (
+                          <div className="w-8 h-8 rounded-lg bg-slate-50 group-hover:bg-emerald-500 group-hover:text-white flex items-center justify-center transition-all">
+                            <ArrowLeft className="w-4 h-4 rotate-180" />
+                          </div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
+                {role === 'Pimpinan' && (
+                  <div className="space-y-3">
+                    <label className="text-sm font-bold text-slate-800">Nomor Surat Izin</label>
+                    <input 
+                      placeholder="Contoh: 070/123/BAKESBANGPOLDAGRI/2026"
+                      className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-medium"
+                      value={nomorSurat}
+                      onChange={e => setNomorSurat(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <label className="text-sm font-bold text-slate-800">Catatan {role}</label>
+                  <textarea 
+                    rows={3}
+                    placeholder="Berikan catatan atau alasan jika ditolak..."
+                    className="w-full px-5 py-3.5 rounded-2xl border border-slate-200 outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all resize-none font-medium"
+                    value={catatan}
+                    onChange={e => setCatatan(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 flex gap-4">
                 <button 
-                  onClick={() => role === 'Admin' ? handleVerify(selectedApp.id, 'REJECTED') : handleApprove(selectedApp.id, 'REJECTED')}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-rose-50 text-rose-600 font-bold hover:bg-rose-100 transition-colors"
+                  onClick={() => setSelectedApp(null)}
+                  className="px-8 py-3.5 rounded-2xl font-bold text-slate-500 hover:bg-slate-200 transition-all"
                 >
-                  Tolak
+                  Tutup
                 </button>
-                <button 
-                  onClick={() => role === 'Admin' ? handleVerify(selectedApp.id, 'VERIFIED') : handleApprove(selectedApp.id, 'APPROVED')}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/20"
-                >
-                  {role === 'Admin' ? 'Verifikasi' : 'Setujui'}
-                </button>
+                <div className="flex-1 flex gap-3">
+                  {(role === 'Admin' && selectedApp.status === 'PENDING') || (role === 'Pimpinan' && selectedApp.status === 'VERIFIED') ? (
+                    <>
+                      <button 
+                        onClick={() => role === 'Admin' ? handleVerify(selectedApp.id, 'REJECTED') : handleApprove(selectedApp.id, 'REJECTED')}
+                        className="flex-1 px-6 py-3.5 rounded-2xl bg-white border-2 border-rose-100 text-rose-600 font-bold hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-sm"
+                      >
+                        Tolak
+                      </button>
+                      <button 
+                        onClick={() => role === 'Admin' ? handleVerify(selectedApp.id, 'VERIFIED') : handleApprove(selectedApp.id, 'APPROVED')}
+                        className="flex-[2] px-6 py-3.5 rounded-2xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
+                      >
+                        {role === 'Admin' ? 'Verifikasi Sekarang' : 'Setujui & Terbitkan'}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-sm font-bold text-slate-400 italic">
+                      Status saat ini: {selectedApp.status}
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>

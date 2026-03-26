@@ -55,6 +55,7 @@ db.exec(`
     file_proposal TEXT,
     file_persetujuan TEXT,
     file_rekomendasi TEXT,
+    satuan TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
@@ -121,7 +122,7 @@ async function startServer() {
     { name: "persetujuan", maxCount: 1 },
     { name: "rekomendasi", maxCount: 1 }
   ]), (req, res) => {
-    const { nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, tanggal_mulai, tanggal_selesai } = req.body;
+    const { nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, tanggal_mulai, tanggal_selesai, satuan } = req.body;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
     
     const file_ktp = files?.["ktp"]?.[0]?.filename;
@@ -134,14 +135,14 @@ async function startServer() {
         INSERT INTO applications (
           nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, 
           tanggal_mulai, tanggal_selesai, file_ktp, file_proposal, 
-          file_persetujuan, file_rekomendasi
+          file_persetujuan, file_rekomendasi, satuan
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const info = stmt.run(
         nama_lengkap, nik, instansi, judul_penelitian, lokasi_penelitian, 
         tanggal_mulai, tanggal_selesai, file_ktp, file_proposal, 
-        file_persetujuan, file_rekomendasi
+        file_persetujuan, file_rekomendasi, satuan
       );
       res.json({ id: info.lastInsertRowid, status: "success" });
     } catch (error) {
